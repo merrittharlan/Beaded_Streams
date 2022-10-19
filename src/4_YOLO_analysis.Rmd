@@ -1,0 +1,19 @@
+---
+title: "YOLO Analysis"
+author: "Merritt Harlan"
+date: '2022-10-18'
+output: html_document
+---
+
+# Steps to recreate YOLO analysis
+- download YOLOv5: https://github.com/ultralytics/yolov5
+- annotate imagery in Roboflow: https://roboflow.com/
+
+# Code for training
+
+python train.py --img 512 --batch 12 --epochs 300 --data ./beaded/data.yaml --weights ./weights.yolov5x.pt
+
+# Code for detection
+
+python detect.py --img 512 --source beaded/cv/beaded10/test/images/ --weights runs/train/cv10/weights/best.pt --conf-thres 0.1 --save-txt --save-crop --save-conf
+

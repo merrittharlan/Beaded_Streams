@@ -1,0 +1,104 @@
+---
+title: "CART Analysis"
+author: "Merritt Harlan"
+date: '2022-10-18'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load packages}
+library(DAAG)
+library(party)
+library(rpart)
+library(rpart.plot)
+library(mlbench)
+library(caret)
+library(pROC)
+library(tree)
+library(dplyr)
+library(sf)
+```
+
+```{r load in training data}
+trained_MERIT = read.csv("../data/training_catchments.csv")
+trained_MERIT = trained_MERIT %>% filter(beaded %in% c("A", "B")) %>% select(c(unitarea, COMBO, slope, uparea, LAKE, width_mean, order, mwth_mean, beaded))
+trained_MERIT$beaded = as.factor(as.character(trained_MERIT$beaded))
+str(trained_MERIT)
+```
+
+```{r expand permafrost codes}
+codes = c(NA, "Chf", "Dhf", "Shf", "Ihf", "Cmf", "Dmf", "Smf", "Imf", "Clf", "Dlf", "Slf", "Ilf", "Chr", "Dhr", "Shr", "Ihr", "Clr", "Dlr", "Slr", "Ilr", "g", "r", "l", "o", "ld")
+nums = c(0:25)
+EXTENT = c(NA, rep(c("C", "D", "S", "I"), 5), rep(NA, 5))
+GROUND = c(NA, rep("h", 4), rep("m", 4), rep("l", 4), rep("h", 4), rep("l", 4), rep(NA, 5))
+PERM_LAND = c(NA, rep("f", 12), rep("r", 8), "g", "r", "l", "o", "ld")
+
+num_codes = data.frame(COMBO = codes, Numbers = nums, EXTENT = EXTENT, GROUND = GROUND, PERM_LAND = PERM_LAND)
+
+trained_MERIT_split = left_join(trained_MERIT, num_codes, by = "COMBO") %>% select(c(-COMBO, -Numbers))
+
+head(trained_MERIT_split)
+nrow(trained_MERIT_split)
+
+trained_MERIT_split$ID = c(1:nrow(trained_MERIT_split))
+colnames(trained_MERIT_split) = c("Area", "Slope", "Up.Area", "Lake", "Width", "Order", "mwth_mean", "beaded", "Perm.Ext", "Ground", "Land")
+
+```
+
+```{r train tree}
+mydata = trained_MERIT_split
+set.seed(123)
+
+ind = sample(2, nrow(mydata), replace = T, prob = c(0.5, 0.5))
+train = mydata[ind == 1,]
+test = mydata[ind == 2,]
+
+tree = rpart(beaded ~., data = train, cp = 0.001)
+rpart.plot(tree, tweak = 0.75)
+
+nrow(test)
+nrow(train)
+printcp(tree)
+```
+
+```{r get training metrics}
+p = predict(tree, train, type = 'class')
+confusionMatrix(p, train$beaded, positive = 'B')
+
+tree.pruned = prune(tree, cp = 0.001)
+
+only_count <- function(x, labs, digits, varlen){
+  paste(x$frame$n)
+}
+
+#Figure 3
+boxcols = c("pink", "palegreen3")[tree.pruned$frame$yval]
+prp(tree.pruned, faclen = 0, cex = 0.65, node.fun=only_count, box.col = boxcols, type =5)
+legend("bottomleft", legend = c("Alluvial", "Beaded"), fill = c("pink", "palegreen3"), title = "Group")
+
+```
+
+```{r get testing metrics}
+p1 = predict(tree, test, type = 'class')
+confusionMatrix(p1, test$beaded, positive = 'B')
+```
+
+```{r predict all}
+MERIT_all = read_sf("../data/out/MERIT_all.shp")
+MERIT_match = MERIT_all %>% select(c(unitarea, COMBO, slope, uparea, LAKE, width_mean, order, mwth_mean))%>% left_join(num_codes, by = "COMBO") %>% select(c(-COMBO, -Numbers))
+
+p_all_prob = predict(tree, MERIT_match, type = "prob")
+p_all_class = predict(tree, MERIT_match, type = "class")
+MERIT_tree = data.frame(ID = c(1:nrow(class_df)), class = p_all_class, A = prob_df$A, B = prob_df$B, COMID = MERIT_all$COMID)
+
+MERIT_pred = MERIT_tree %>% full_join(MERIT_all)
+
+MERIT_possible_beads = MERIT_pred %>% filter(class == "B")
+
+st_write(MERIT_possible_beads, "data/out/MERIT_possible_beads.shp")
+
+```
+

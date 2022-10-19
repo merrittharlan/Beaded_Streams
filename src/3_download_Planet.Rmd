@@ -1,0 +1,313 @@
+---
+title: "Download Planet"
+author: "Merritt Harlan"
+date: '2022-10-18'
+output: html_document
+---
+
+```{python import libraries}
+import os
+import requests
+import json
+import sys
+from planet.api.auth import find_api_key
+from requests.auth import HTTPBasicAuth
+import numpy as np
+import time
+import pathlib
+import pyproj
+from shapely.geometry import shape
+from shapely.ops import transform
+from datetime import datetime
+from datetime import timezone
+from time import mktime
+from planet.api.utils import strp_lenient
+
+```
+
+```{python get stream geometry}
+with open('../data/out/MERIT_possible_beads.geojson') as f:
+  json_catchment = json.load(f)
+  beaded_catchment = []
+  beaded_geometry = []
+  for i in range(len(json_catchment['features'])):
+    beaded_geometry.append(json_catchment['features'][i]['geometry'])
+    beaded_catchment.append(json_catchment['features'][i]['geometry']['coordinates'][0])
+
+print(f'Total of {len(beaded_catchment)} geometries')
+```
+
+```{python get Planet API}
+try:
+  PLANET_API_KEY = find_api_key()
+except Exception as e:
+  print("Failed to get Planet Key: try planet init or install Planet Command line tool:)
+  sys.exit()
+
+with open('Planet_password.txt') as f:
+  password = f.readlines()[0]
+payload = json.dumps({
+  "email": email,
+  "password": password
+})
+
+print("got API key")
+
+```
+
+```{python set up response}
+headers = {'Content-Type': 'application/json'}
+
+response = requests.post(
+  "https://api.planet.com/auth/v1/experimental/public/users/authenticate",
+  headers = headers
+  data = payload,
+)
+
+if response.status_code == 200:
+  bearer_token = f"Bearer {response.json()['token']}"
+else:
+  sys.exit(f"Failed with status code {response.status_code}")
+
+```
+
+```{python search payload}
+def search_payload(geom):
+  geojson_geometry = {
+    "type": "Polygon",
+    "coordinates": [geom]
+  }
+  geometry_filter = {
+    "type": "GeometryFilter",
+    "field_name": "geometry",
+    "config": geojson_geometry
+  }
+  date_range_filter = {
+    "type": "DateRangeFilter",
+    "field_name": "acquired",
+    "config": {
+      "gte": "2021-05-01T00:00:00.000Z",
+      "lte": "2021-09-01T00:00:00.000Z"
+      }
+  }
+  cloud_cover_filter = {
+    "type": "RangeFilter",
+    "field_name": "cloud_cover",
+    "config": {
+      "lte": 15
+      }
+  }
+  clear_filter = {
+    "type": "RangeFilter",
+    "field_name": "clear_percent",
+    "config": {
+      "gte": 50
+      }
+  }
+  visible_filter = {
+    "type": "RangeFilter",
+    "field_name": "visible_percent",
+    "config": {
+      "gte": 50
+      }
+  }
+  instrument_filter = {
+    "type": "StringInFilter",
+    "field_name": "instrument",
+    "config": ["PSB.SD"]
+  }
+  quality_filter = {
+    "type": "StringInFilter",
+    "field_name": "ground_control",
+    "config": ["true"]
+  }
+  snow_ice_filter = {
+    "type": "RangeFilter",
+    "field_name": "snow_ice_percent",
+    "config": {
+      "lte": 15
+    }
+  }
+  asset_filter = {
+    "type": "PermissionFilter",
+    "config": ["assets.analytic_sr:download"]
+  }
+  combined_filter = {
+    "type": "AndFilter",
+    "config": [instrument_filter, date_range_filter, geometry_filter,
+    clear_filter, visible_filter, snow_ice_filter, asset_filter,
+    cloud_cover_filter, quality_filter, ground_filter]
+  }
+  item_type = "PSScene4Band"
+  
+  #API request object
+  search_request = {
+    "item_types": [item_type],
+    "filter": combined_filter
+  }
+  return search_request
+
+```
+
+```{python download image IDs}
+id_master = []
+bad_geom = []
+good_geom = []
+
+def yield_features(count, url, auth, payload):
+  page = requests.post(url, auth=auth, data = json.dumps(payload), headers = headers)
+  if response.status_code == 200:
+    if page.json()['features']:
+      for feature in page.json()['features']:
+        yield feature
+      while True:
+        url = page.json()['_links']['_next']
+        page = requests.get(url, auth=auth)
+        
+        for feature in page.json()['features']:
+          yield feature
+        if page.json()['_links'].get('_next') is None:
+          break
+
+def ft_iterate(geom, count):
+    search_json = search_payload(geom)
+    ovp = 95
+    #print(search_json)
+    all_features = list(
+        yield_features(count, 'https://api.planet.com/data/v1/quick-search',
+                       HTTPBasicAuth(PLANET_API_KEY, ''), search_json))
+    if all_features:
+    #print(all_features)
+        image_ids = [x['id'] for x in all_features]
+        close_feat=[]
+        close_ids=[]
+        aoi_shape = shape(beaded_geometry[count-1])
+        #print(aoi_shape.area)
+
+        for feature in all_features:
+            s = shape(feature['geometry'])
+            #print("feat area", s.area)
+            epsgcode = feature["properties"]["epsg_code"]
+            intersect = (aoi_shape).intersection(s)
+            proj_transform = pyproj.Transformer.from_proj(
+                pyproj.Proj(4326), pyproj.Proj(epsgcode), always_xy=True
+            ).transform  # always_xy determines correct coord order
+
+            overlap = (transform(proj_transform, intersect).area
+                / transform(proj_transform, aoi_shape).area* 100)
+            #print(overlap)
+            if overlap > ovp:
+                close_feat.append(feature)
+                close_ids.append(feature['id'])
+        if close_ids:
+            clearPer = [x['properties']['clear_percent'] for x in close_feat]
+            best = np.where(clearPer == np.amax(clearPer))[0][0]
+            id_master.append(close_ids[best])
+            good_geom.append(count)
+        else:
+            bad_geom.append(count)
+    else:
+        bad_geom.append(count)
+       
+
+### Try in batches of 500
+for batch in range(0,1):
+    id_master=[]
+    bad_geom=[]
+    good_geom=[]
+   
+    if batch == 197:
+        beaded_catchment_test = beaded_catchment[(((batch-1)*500)):]
+    else:
+        beaded_catchment_test = beaded_catchment[(((batch-1)*500)):((batch*500))]
+    i = (((batch-1)*500)+1)
+    print(i)
+    c = 0
+    \
+    for bboxes in beaded_catchment_test:
+        try:
+            ft_iterate(bboxes, count = i)
+            print("works")
+        except:
+            bad_geom.append(i)
+            print("error occurred")
+        i = i + 1
+        c = c + 1
+        print("completed ", c, " out of ", len(beaded_catchment_test), "for batch ", batch)
+
+    outfile = "ALL_IMAGEIDS/beaded_image_ids_" + str(batch) +".npy"
+    badfile = "ALL_BAD/bad_geoms_" + str(batch)+".npy"
+    goodfile = "ALL_GOOD/good_geoms_" + str(batch)+".npy"
+    np.save(outfile, id_master)
+    np.save(badfile, bad_geom)
+    np.save(goodfile, good_geom)
+
+```
+
+```{python download locally}
+### Import libraries
+import os
+import requests
+import json
+import sys
+import time
+import pathlib
+import pyproj
+from shapely.geometry import shape
+from shapely.ops import transform
+from datetime import datetime
+from datetime import timezone
+from time import mktime
+from planet.api.auth import find_api_key
+from planet.api.utils import strp_lenient
+from requests.auth import HTTPBasicAuth
+import numpy as np
+
+## Get your API Key
+try:
+    PLANET_API_KEY = find_api_key() #remove find_api_key and place your api key like 'api-key'
+except Exception as e:
+    print("Failed to get Planet Key: Try planet init or install Planet Command line tool")
+    sys.exit()
+
+headers = {'Content-Type': 'application/json'}
+
+# check if API key is valid
+response = requests.get('https://api.planet.com/compute/ops/orders/v2',auth=(PLANET_API_KEY, ""))
+if response.status_code==200:
+    print('Setup OK: API key valid')
+    print(PLANET_API_KEY)
+else:
+    print(f'Failed with response code {response.status_code}: reinitialize using planet init')
+   
+
+def download_results(order_url,folder, overwrite=False):
+    r = requests.get(order_url, auth=(PLANET_API_KEY, ""))
+    if r.status_code ==200:
+        response = r.json()
+        results = response['_links']['results']
+        results_urls = [r['location'] for r in results]
+        results_names = [r['name'] for r in results]
+        print('{} items to download'.format(len(results_urls)))
+
+        for url, name in zip(results_urls, results_names):
+            path = pathlib.Path(os.path.join(folder,name))
+
+            if overwrite or not path.exists():
+                print('downloading {} to {}'.format(name, path))
+                r = requests.get(url, allow_redirects=True)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                open(path, 'wb').write(r.content)
+            else:
+                print('{} already exists, skipping {}'.format(path, name))
+    else:
+        print(f'Failed with response {r.status_code}')
+
+for batch in range(41,198):
+    order_name = "order_urls/order_urls_" + str(batch) + ".npy"
+    order_urls = np.load(order_name, allow_pickle = True)
+    for url in order_urls:
+        if url != None:
+            download_results(url,folder=r'outfolder')
+```
+

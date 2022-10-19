@@ -1,0 +1,55 @@
+---
+title: "Merge Catchments"
+author: "Merritt Harlan"
+date: '2022-10-18'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Input data
+MERITHydro-Vector data can be downloaded here: https://www.reachhydro.org/home/params/merit-basins
+
+NSIDC data can be downloaded here: https://nsidc.org/data/ggd318/versions/2#anchor-1
+
+GRWL (to obtain widths for MERITHydro) can be downloaded here: https://zenodo.org/record/1297434#.Y07NCdfMI2w
+
+
+```{r install packages, message=FALSE, warning=FALSE}
+library(sf)
+library(dplyr)
+library(rgeos)
+```
+
+```{r load data}
+MERITHydro = read_sf("../data/GIS/PAD_whole_riv_pfaf_MERIT_Hydro_v07_Basins_v01.shp")
+permaice = read_sf("../data/GIS/permaice.shp")
+Arp_streams = read_sf("../data/GIS/beaded_streams_mapped_CAI_points_join.shp")
+```
+
+```{r merge data}
+permafrost_combo = permaice %>% select(COMBO) %>% st_transform(st_crs(MERITHydro)) %>% st_make_valid()
+MERIT_riv = MERITHydro %>% select(c(COMID, slope, uparea, LAKE, width_mean, order, mwth_mean)) %>% st_make_valid()
+
+#note: this spatial join takes a lot of memory-- recommended to computationally do this with several GB of memory (> 20 GB) and several cores (>10)
+MERIT_all = st_join(MERIT_riv, permafrost_combo, largest = TRUE)
+st_write(MERIT_all, "../data/out/MERIT_all.shp")
+
+```
+
+```{r export and subset data}
+#get Arp catchments
+MERIT_Arp = st_join(Arp_streams, MERIT_all)
+st_write(MERIT_Arp, "../data/out/MERIT_Arp.csv")
+
+#randomly select an additional 500 catchments (462 of which were classified, 38 missing high resolution imagery, but omission was spatially non-biased)
+set.seed(123)
+subset = sample(nrow(MERIT_all), 500)
+MERIT_subset = MERIT_all[subset,]
+st_write(MERIT_subset, "../data/out/MERIT_subset.csv")
+
+```
+
+Following these spatial merges, we combined the previously identified Arp et al. (2015) catchments with the random subset of catchments, and manually inspected catchments to confirm the presence of beaded streams. 
