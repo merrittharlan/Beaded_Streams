@@ -1,0 +1,96 @@
+---
+title: "draw_validation"
+output: html_document
+date: '2022-10-11'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r cars}
+require(jpeg)
+library(sf)
+library(ggplot2)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+yolo_images = list.files("data/images", pattern = ".jpg", full.names = TRUE)
+yolo_labels = list.files("data/labels", full.names = TRUE)
+yolo_pred = list.files("data/pred", full.names = TRUE)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+
+valid_bbox = list()
+pred_bbox = list()
+for(i in 1:length(yolo_images)){
+  image_name = substr(list.files("data/images")[i],1, 40)
+
+  #then find matching tifs  
+  label = list.files("data/labels", pattern = image_name, full.names = TRUE)
+  
+  png(paste0("data/out/", i, ".png"), width=8,height=8,units="in",res=300)
+  img = readJPEG(yolo_images[i])
+  plot(1:2,ty="n", axes = FALSE, frame.plot = FALSE)
+  rasterImage(img,1,1,2,2)
+  
+  if(length(label>1)){
+      valid_label = suppressWarnings(read.table(label))
+       valid_bbox[[i]] = list()
+      for(b in 1:nrow(valid_label)){
+          #make the bounding box spatial
+          valid_bbox[[i]][[b]] = st_polygon(list(rbind(c(valid_label$V2[b]-0.5*valid_label$V4[b]+1, (1-valid_label$V3[b])-0.5*valid_label$V5[b]+1),
+                c(valid_label$V2[b]-0.5*valid_label$V4[b]+1, (1-valid_label$V3[b])+0.5*valid_label$V5[b]+1),
+                c(valid_label$V2[b]+0.5*valid_label$V4[b]+1, (1-valid_label$V3[b])+0.5*valid_label$V5[b]+1),
+                c(valid_label$V2[b]+0.5*valid_label$V4[b]+1, (1-valid_label$V3[b])-0.5*valid_label$V5[b]+1),
+                c(valid_label$V2[b]-0.5*valid_label$V4[b]+1, (1-valid_label$V3[b])-0.5*valid_label$V5[b]+1))))
+          plot(valid_bbox[[i]][[b]], lwd = 5, add= TRUE, border= "yellow", col = rgb(red = 0, green = 0, blue = 1, alpha = 0))
+      }
+  }
+  pred = list.files("data/pred",pattern = image_name, full.names = TRUE)
+  if(length(label)>0){
+      pred_label = read.table(pred)
+      pred_bbox[[i]] = list()
+      conf = list()
+      for(bb in 1:nrow(pred_label)){
+          #make the bounding box spatial
+          pred_bbox[[i]][[bb]] = st_polygon(list(rbind(c(pred_label$V2[bb]-0.5*pred_label$V4[bb]+1, (1-pred_label$V3[bb])-0.5*pred_label$V5[bb]+1),
+                c(pred_label$V2[bb]-0.5*pred_label$V4[bb]+1, (1-pred_label$V3[bb])+0.5*pred_label$V5[bb]+1),
+                c(pred_label$V2[bb]+0.5*pred_label$V4[bb]+1, (1-pred_label$V3[bb])+0.5*pred_label$V5[bb]+1),
+                c(pred_label$V2[bb]+0.5*pred_label$V4[bb]+1, (1-pred_label$V3[bb])-0.5*pred_label$V5[bb]+1),
+                c(pred_label$V2[bb]-0.5*pred_label$V4[bb]+1, (1-pred_label$V3[bb])-0.5*pred_label$V5[bb]+1))))
+          conf[[bb]] = pred_label$V6[bb]
+          plot(pred_bbox[[i]][[bb]], lwd = 5, lty =2, add= TRUE, border = "turquoise1", col = rgb(red = 0, green = 1, blue = 0, alpha = 0))
+          #text(pred_label$V2[bb]+0.5*pred_label$V4[bb]+1.03, (1-pred_label$V3[bb])+0.5*pred_label$V5[bb]+1.03, paste0(round(as.numeric(conf[bb]),2)), col = "turquoise1", cex = 1.5)
+  
+      }
+  }
+  dev.off()
+  
+}
+
+
+```
+
+```{r}
+png("1.png", width=2,height=8,units="in",res=300)
+img<-readJPEG(yolo_images[i])
+plot(1:2,ty="n")
+#specify the position of the image through bottom-left and top-right coords
+rasterImage(img,1,1,2,2)
+plot(valid_bbox[[1]], lwd = 5, add= TRUE, border= "yellow", col = rgb(red = 0, green = 0, blue = 1, alpha = 0))
+plot(pred_bbox[[1]], lwd = 5, lty =2, add= TRUE, border = "turquoise1", col = rgb(red = 0, green = 1, blue = 0, alpha = 0))
+plot(pred_bbox[[2]], lwd = 5, lty = 2, add= TRUE, border= "turquoise1", col = rgb(red = 0, green = 1, blue = 0, alpha = 0))
+plot(pred_bbox[[3]], lwd = 5, lty = 2, add= TRUE, border= "turquoise1", col = rgb(red = 0, green = 1, blue = 0, alpha = 0))
+text(1.25, 1.95, "0.165", cex = 1.75, col = "turquoise1")
+text(1.91, 1.85, "0.202", cex = 1.75, col = "turquoise1")
+dev.off()
+```
+

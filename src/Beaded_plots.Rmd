@@ -1,0 +1,151 @@
+---
+title: "catchment_analysis"
+output: html_document
+date: '2022-10-04'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r load libraries}
+library(sf)
+library(dplyr)
+library(ggplot2)
+```
+
+
+```{r Compare statistics of output with }
+MERIT_4326 = read_sf("data/Beaded_Streams/MERIT_4326.shp")
+MERIT_4326 = MERIT_4326 %>% mutate(continent = factor(substr(MERIT_4326$COMID,1,1)))
+MERIT_4326 = MERIT_4326 %>% mutate(perm = factor(substr(MERIT_4326$COMBO,1,1)))
+
+beaded_MERIT = read_sf("data/Beaded_Streams/MERIT_possible_beads.shp")
+beaded_MERIT = beaded_MERIT %>% mutate(continent = factor(substr(beaded_MERIT$COMID,1,1)))
+beaded_MERIT = beaded_MERIT %>% mutate(perm = factor(substr(beaded_MERIT$COMBO,1,1)))
+summary(beaded_MERIT$continent)
+summary(beaded_MERIT$perm)
+
+mean(beaded_MERIT$slope, na.rm = TRUE)
+sd(beaded_MERIT$slope, na.rm = TRUE)
+mean(beaded_MERIT$width_mean, na.rm = TRUE)
+sd(beaded_MERIT$width_mean, na.rm = TRUE)
+mean(beaded_MERIT$uparea, na.rm = TRUE)
+sd(beaded_MERIT$uparea, na.rm = TRUE)
+mean(beaded_MERIT$unitarea, na.rm = TRUE)
+sd(beaded_MERIT$unitarea, na.rm = TRUE)
+mean(beaded_MERIT$order, na.rm = TRUE)
+sd(beaded_MERIT$order, na.rm = TRUE)
+
+Arp_int = read_sf("data/Beaded_Streams/Arp_int.shp")
+Arp_int = data.frame(Arp_int) %>% distinct(ID, .keep_all = TRUE)
+Arp_int = Arp_int %>% mutate(perm = factor(substr(Arp_int$COMBO,1,1)))
+Arp_int = Arp_int %>% mutate(continent = factor(substr(Arp_int$COMID,1,1)))
+summary(Arp_int$perm)
+summary(Arp_int$continent)
+
+mean(Arp_int$slope, na.rm = TRUE)
+sd(Arp_int$slope, na.rm = TRUE)
+mean(Arp_int$width_mean, na.rm = TRUE)
+sd(Arp_int$width_mean, na.rm = TRUE)
+mean(Arp_int$uparea, na.rm = TRUE)
+sd(Arp_int$uparea, na.rm = TRUE)
+mean(Arp_int$unitarea, na.rm = TRUE)
+sd(Arp_int$unitarea, na.rm = TRUE)
+mean(Arp_int$order, na.rm = TRUE)
+sd(Arp_int$order, na.rm = TRUE)
+
+```
+
+```{r}
+new_box_int_1 = data.frame(read_sf("data/Beaded_Streams/new_box_int_1.shp")) %>% filter(conf > 0) %>% distinct(ID, .keep_all = TRUE)
+new_box_int_2 = data.frame(read_sf("data/Beaded_Streams/new_box_int_2.shp")) %>% filter(conf > 0) %>% distinct(ID, .keep_all = TRUE)
+new_box_int_3 = data.frame(read_sf("data/Beaded_Streams/new_box_int_3.shp")) %>% filter(conf > 0) %>% distinct(ID, .keep_all = TRUE)
+new_box_int_4 = data.frame(read_sf("data/Beaded_Streams/new_box_int_4.shp")) %>% filter(conf > 0) %>% distinct(ID, .keep_all = TRUE)
+new_box_int_5 = data.frame(read_sf("data/Beaded_Streams/new_box_int_5.shp")) %>% filter(conf > 0) %>% distinct(ID, .keep_all = TRUE)
+new_box_int_6 = data.frame(read_sf("data/Beaded_Streams/new_box_int_6.shp")) %>% filter(conf > 0) %>% distinct(ID, .keep_all = TRUE)
+new_box_int_7 = data.frame(read_sf("data/Beaded_Streams/new_box_int_7.shp")) %>% filter(conf > 0) %>% distinct(ID, .keep_all = TRUE)
+new_box_int_8 = data.frame(read_sf("data/Beaded_Streams/new_box_int_8.shp")) %>% filter(conf > 0) %>% distinct(ID, .keep_all = TRUE)
+new_box_int_9 = data.frame(read_sf("data/Beaded_Streams/new_box_int_9.shp")) %>% filter(conf > 0) %>% distinct(ID, .keep_all = TRUE)
+new_box_int_10 = data.frame(read_sf("data/Beaded_Streams/new_box_int_10.shp")) %>% filter(conf > 0) %>% distinct(ID, .keep_all = TRUE)
+new_box_int_11 = data.frame(read_sf("data/Beaded_Streams/new_box_int_11.shp")) %>% filter(conf > 0) %>% distinct(ID, .keep_all = TRUE)
+new_box_int_12 = data.frame(read_sf("data/Beaded_Streams/new_box_int_12.shp")) %>% filter(conf > 0) %>% distinct(ID, .keep_all = TRUE)
+new_box_int_13 = data.frame(read_sf("data/Beaded_Streams/new_box_int_13.shp")) %>% filter(conf > 0) %>% distinct(ID, .keep_all = TRUE)
+new_box_int_14 = data.frame(read_sf("data/Beaded_Streams/new_box_int_14.shp")) %>% filter(conf > 0) %>% distinct(ID, .keep_all = TRUE)
+new_box_int_15 = data.frame(read_sf("data/Beaded_Streams/new_box_int_15.shp")) %>% filter(conf > 0) %>% distinct(ID, .keep_all = TRUE)
+
+```
+
+```{r}
+new_box_int_comb = rbind(new_box_int_1, new_box_int_2, new_box_int_3, new_box_int_4, new_box_int_5, 
+                         new_box_int_6, new_box_int_7, new_box_int_8, new_box_int_9, new_box_int_10, 
+                         new_box_int_11, new_box_int_12, new_box_int_13, new_box_int_14, new_box_int_15)
+head(new_box_int_comb)
+new_box_unique = new_box_int_comb %>% distinct(ID, .keep_all = TRUE)
+new_box_unique = new_box_unique %>% mutate(perm = substr(new_box_unique$COMBO,1,1))
+new_box_unique = new_box_unique %>% mutate(continent = factor(substr(new_box_unique$COMID,1,1)))
+summary(new_box_unique$continent)
+
+nrow(new_box_unique)
+nrow(new_box_unique %>% filter(conf > 0.1))
+
+new_box_25 = new_box_unique %>% filter(conf > 0.25)
+
+summary(factor(substr(new_box_25$COMBO,3,3)))
+summary(factor(substr(new_box_unique$COMBO,3,3)))
+
+png("confidence.png", width = 1800, height = 1200)
+ggplot(new_box_unique, aes(x = conf)) + geom_histogram()+theme_bw() +xlab("YOLO Confidence")+
+    ylab("Number of beaded catchments")+ theme(text=element_text(size=70))
+dev.off()
+
+Permafrost = c(as.character(Arp_int$perm), new_box_unique$perm, 
+                           as.character(beaded_MERIT$perm), as.character(MERIT_4326$perm))
+
+length(Permafrost)
+Continent = c(as.character(c(rep(8,.31*1900), rep(3, .69*1900))), as.character(new_box_unique$continent), 
+                                        as.character(beaded_MERIT$continent),
+                                        as.character(MERIT_4326$continent))
+
+data_combined = data.frame(Permafrost = c(c(as.character(Arp_int$perm), c(rep("C", 1525))), new_box_unique$perm, 
+                           as.character(beaded_MERIT$perm), as.character(MERIT_4326$perm)),
+                          Continent = c(as.character(c(rep(8,.31*1900), rep(3, .69*1900))), as.character(new_box_unique$continent), 
+                                        as.character(beaded_MERIT$continent),
+                                        as.character(MERIT_4326$continent)),
+                          Legend = c(rep("Arp et al., 2015", 1900), rep("Computer Vision", nrow(new_box_unique)),
+                                     rep("Classified", nrow(beaded_MERIT)),
+                                 rep("Pan-Arctic", nrow(MERIT_4326))))
+data_combined$Test = factor(factor(data_combined$Legend), levels = levels(factor(data_combined$Legend))[c(1,3,2,4)])
+data_new = data_combined %>% filter(Legend %in% c("Arp et al., 2015", "Computer Vision"))
+library(ggsci)
+
+png("continent.png", width = 2000, height = 500)
+ggplot(data=data_new, aes(x=Test, fill = Continent)) +
+    geom_bar(stat="count")+theme_bw()+coord_flip()+ ylab("Catchment Count")+scale_fill_manual(name = 'Continent',values =c('2'='#0073C2FF','3'='#EFC000FF', '8'='#868686FF'), labels = c('Europe','Asia', 'North America'))+
+    theme(text=element_text(size=50), axis.title.y=element_blank()) #+scale_x_discrete(c(1,4,2,3))
+dev.off()
+
+data_combined$Test = factor(factor(data_combined$Legend), levels = levels(factor(data_combined$Legend))[c(3,2,1,4,5)])
+
+levels(factor(data_combined$Legend))
+
+png("permafrost.png", width = 2000, height = 550)
+ggplot(data=data_new, aes(x=Test, fill = Permafrost)) + geom_bar(stat="count", position = "fill")+theme_bw()+coord_flip()+ylab("Count")+
+    scale_fill_manual(name = 'Permafrost', values =c('C'='lightslategrey','D'='lightskyblue3', 
+                                                     'S'='lightblue1','I'='mintcream','g'='turquoise1',
+                                                     'l'='aquamarine4', 'o'='darkseagreen1', 'r'='burlywood4'),
+                     labels = c('Continuous','Discontinuous',  'Semi-continuous', 'Isolated Permafrost','Glacier', 'Inland Lakes', 'Ocean/Inland Sea', 'Highlands'))+
+    theme(text=element_text(size=50), axis.title.y=element_blank())+ylab("Proportion of Total Catchments")
+dev.off()
+
+```
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
